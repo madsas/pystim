@@ -1,6 +1,9 @@
+from __future__ import division
 import os.path
 import array
 import numpy as np
+import struct
+
 """
 This library/module/package deals with importing EI (as analyzed by Vision) and electrical stim data. 
 
@@ -21,11 +24,11 @@ class datarun(object):
 		for key in namDict.keys(): setattr(self, key, namDict[key])
 
 	
-	def load_neurons(self, neuronIDs = []):
+	def load_neurons(self, neuronIds = []):
 		"""
 		Loads a .neurons file based on the path given above. Will report missing file.
 
-		The optional argument, neuronIDs, is a list of specific neuron IDs to extract information for. 
+		The optional argument, neuronIds, is a list of specific neuron IDs to extract information for. 
 		Default in this case is to load all neurons.
 		"""
 		#Parameters------------------------------
@@ -63,7 +66,7 @@ class datarun(object):
 			numRecords = struct.unpack(long_type, f.read(4))[0]
 			spikeTimeType = long_type
 		elif fileVersion == 100: #Dumitru's version used in Manual sorting
-			numberRecords = 1
+			numRecords = 1
 			spikeTimeType = float_type
 		else:
 			print('Unknown File Version')
@@ -104,6 +107,85 @@ class datarun(object):
 		del buffervar
 
 		#Update user
-		print('Examining ' + numCells + ' cells (RRS v.' + fileVersion +')')
+		print('Examining ' + str(numCells) + ' cells (RRS v.' + str(fileVersion) +')')
 
+		#Determine Neurons to Extract------------------------------
 
+		#Neuron ID for triggers
+		triggerId = cellIds[0]
+		
+		#Determine which to load based on argument
+		if neuronIds: 
+			if not set(neuronIds) < set(cellIds): #make sure neuron IDs exist
+				print('Error: Could not find some neurons specified by user')
+				return
+			if not len(set(neuronIds)) == len(neuronIds):
+				print('Error: Duplicate neurons requested')
+				return
+			neurons = triggerId + neuronIds
+		else: #load all neurons 
+			neurons = cellIds
+
+		#Initialize Variables------------------------------
+		spikes = []
+		spikeCounts = np.zeros((numCells))
+		neuronsExtracted = []
+
+		#Load Spike Times------------------------------
+		for rec in range(numRecords): #loop through number of records (different from 1 in version 33)
+			for cell in range(numCells):
+
+				#Number of spikes by cell
+				sc = struct.unpack(long_type, f.read(4))[0]
+				spikeCounts[cell] = sc
+				
+				#Get index (necessary for file I/O)
+				try:
+					indexx = list(neurons).index(cellIds[cell])
+				except ValueError:
+					f.seek(4*sc, 1)
+					continue
+				
+				#Read spikes (if cell is in list of desired neurons)
+				#spikes.append(struct.unpack(spikeTimeType, f.read(sc*4))[0])
+			#	spikes.append(struct.unpack(long_type, f.read(sc*4))[0])
+				spikes.append(struct.unpack(long_type, f.read(4))[0])
+				neuronsExtracted.append(cellIds[cell])
+
+		#Close file
+		f.close()
+
+		#check that extracted correct number of neurons
+		if not len(neuronsExtracted) == len(neurons):
+			print('Error: failed to load all request neurons')
+
+		#Clean up output------------------------------
+		triggers = spikes[0] #extract triggers
+		
+		#find neurons that are not triggers or duplicates
+		indices = [i for i in range(len(neurons)) if neurons[i] > 0]
+		neurons = [neurons[i] for i in indices]
+		spikes = [spikes[i] for i in indices]
+		electrodes = np.zeros((len(indices)))
+
+		#determine channels associated with neurons
+		for i in range(len(neurons)):
+			indexx = list(cellIds).index(neurons[i])
+			electrodes[i] = channels(indexx)
+
+		#convert samples into seconds for everything
+		spikes = [np.array(spike)/samplingFreq for spike in spikes]
+		triggers = np.array(triggers)/samplingFreq
+		duration = nTicks/samplingFreq
+
+		#Return output------------------------------
+		extras = {'channels' : electrodes, 'cell_ids' : neurons, 'triggers' : triggers, 'duration' : duration}
+
+		#update user
+		print('Extracted ' +  str(len(spikes))  + ' cells.')
+
+		#Update self
+		self.spikes = spikes
+		self.extras = extras
+
+		return spikes, extras
