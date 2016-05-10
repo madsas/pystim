@@ -1,0 +1,28 @@
+***Documentation for Pystim***
+
+init: Create a 'datarun' object 
+	Argument: Path to data folder + backslash + prefix (ex: /Volumes/Analysis/2016-02-17-5/data003/data003)
+	Returns: If unsuccessful 0. If successful one datarun object with the following fields:
+		Vision output file paths:
+			rrs_prefix: no extension path name string
+			rrs_neurons_path: .neurons file string
+			rrs_params_path: .params file string
+			rrs_ei_path: .ei file string
+			rrs_sta_path: .sta file string
+			rrs_globals_path: .globals file string
+			rrs_movie_path: .movie file string
+			rrs_cov_path: .cov file string
+			rrs_ncov_path: .ncov file string
+			rrs_wcov_path: .wcov file string
+
+load_neurons:
+	Argument: [optional] Desired neuron IDs for which to extract spike data
+	Returns: If unsuccessful 0. If successful returns 1) spikes and 2) extras
+		Spikes: A list of lists, where each element, corresponding to each extracted cell, is a list of spike times in seconds
+		Extras: A dictionary (same as MATLAB struct) containing the following fields:
+			channels: List of electrodes associated with each cell. Index is same as that for 'spikes'
+			cellIds: List of neuron IDs for which spike times were attempted to be extracted
+			triggers: List of triggers in seconds
+			duration: Total duration of visual stimulus recording in seconds
+			neuronsExtracted: List of neuron IDs for which spike times were actually extracted
+		These two outputs are also added as fields to the datarun object

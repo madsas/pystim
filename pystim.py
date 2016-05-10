@@ -1,5 +1,5 @@
 from __future__ import division
-import os.path
+import os
 import array
 import numpy as np
 import struct
@@ -13,12 +13,22 @@ class datarun(object):
 	"""
 	This class will produce an datarun object
 	"""
+	#Class-wide variables
+	fsep = os.sep #in order to make this code work on all OS
+
 	def __init__(self, dataPath):
 		"""
 		Initializes datarun object given path to Vision output folder, on visual stimulation data
 		"""
+		#Check that data path exists
+		if dataPath.endswith(fsep): dirnam = fsep.join(dataPath.split(fsep)[:-2])
+		else: dirnam = fsep.join(dataPath.split(fsep)[:-1])
+		if not os.path.isdir(dirnam):  
+			print('Error: parent directory given does not exist')
+			return 0
+
 		#Parameters------------------------------
-		namDict = {'rrs_prefix' : dataPath , 'rrs_neurons_path' : dataPath + '.neurons' , 'rrs_params_path' : dataPath + '.params' , 'rrs_ei_path' : dataPath + '.ei' , 'rrs_sta_path' : '.sta' , 'rrs_globals_path' : dataPath + '.globals' , 'rrs_movie_path' : dataPath + '.movie' , 'rrs_cov_path' : dataPath + '.cov' , 'rros_ncov_path' : dataPath + '.ncov' , 'rrs_wcov_path' : dataPath + '.wcov'}
+		namDict = {'rrs_prefix' : dataPath , 'rrs_neurons_path' : dataPath + '.neurons' , 'rrs_params_path' : dataPath + '.params' , 'rrs_ei_path' : dataPath + '.ei' , 'rrs_sta_path' : '.sta' , 'rrs_globals_path' : dataPath + '.globals' , 'rrs_movie_path' : dataPath + '.movie' , 'rrs_cov_path' : dataPath + '.cov' , 'rrs_ncov_path' : dataPath + '.ncov' , 'rrs_wcov_path' : dataPath + '.wcov'}
 
 		#Set names based on path
 		for key in namDict.keys(): setattr(self, key, namDict[key])
@@ -44,7 +54,7 @@ class datarun(object):
 		#Check if file exists
 		if not os.path.isfile(self.rrs_neurons_path): 
 			print('Neurons file does not exist')
-			return
+			return 0
 	
 		#Open file and read header------------------------------
 		headerVals = 4 #number of values to read from header
@@ -56,7 +66,7 @@ class datarun(object):
 		#Check sampling frequency
 		if samplingFreq != defaultSampFreq: 
 			print('Incorrect sampling frequency. Did not load neurons')
-			return
+			return 0
 
 		#Check file version (NOT READING EXTRA PARAMETERS: contamination, min_spikes, remove_duplicates)
 		if fileVersion == 32: #Very old Obvius version. Used in Java code
@@ -70,7 +80,7 @@ class datarun(object):
 			spikeTimeType = float_type
 		else:
 			print('Unknown File Version')
-			return
+			return 0 
 
 		#Skip through end of blank header
 		f.seek(endOfHeader)
@@ -101,7 +111,7 @@ class datarun(object):
 		#check first cell is trigger
 		if channels[0]: 
 			print('trigger not found')
-			return
+			return 0
 
 		#delete buffervar
 		del buffervar
@@ -118,10 +128,10 @@ class datarun(object):
 		if neuronIds: 
 			if not set(neuronIds) < set(cellIds): #make sure neuron IDs exist
 				print('Error: Could not find some neurons specified by user')
-				return
+				return 0
 			if not len(set(neuronIds)) == len(neuronIds):
 				print('Error: Duplicate neurons requested')
-				return
+				return 0
 			neurons = triggerId + neuronIds
 		else: #load all neurons 
 			neurons = cellIds
@@ -147,9 +157,7 @@ class datarun(object):
 					continue
 				
 				#Read spikes (if cell is in list of desired neurons)
-				#spikes.append(struct.unpack(spikeTimeType, f.read(sc*4))[0])
-			#	spikes.append(struct.unpack(long_type, f.read(sc*4))[0])
-				spikes.append(struct.unpack(long_type, f.read(4))[0])
+				spikes.append([struct.unpack(long_type, f.read(4))[0] for s in range(sc)])
 				neuronsExtracted.append(cellIds[cell])
 
 		#Close file
@@ -158,6 +166,7 @@ class datarun(object):
 		#check that extracted correct number of neurons
 		if not len(neuronsExtracted) == len(neurons):
 			print('Error: failed to load all request neurons')
+			return 0
 
 		#Clean up output------------------------------
 		triggers = spikes[0] #extract triggers
@@ -171,7 +180,7 @@ class datarun(object):
 		#determine channels associated with neurons
 		for i in range(len(neurons)):
 			indexx = list(cellIds).index(neurons[i])
-			electrodes[i] = channels(indexx)
+			electrodes[i] = channels[indexx]
 
 		#convert samples into seconds for everything
 		spikes = [np.array(spike)/samplingFreq for spike in spikes]
@@ -179,7 +188,7 @@ class datarun(object):
 		duration = nTicks/samplingFreq
 
 		#Return output------------------------------
-		extras = {'channels' : electrodes, 'cell_ids' : neurons, 'triggers' : triggers, 'duration' : duration}
+		extras = {'channels' : electrodes, 'cellIds' : neurons, 'triggers' : triggers, 'duration' : duration, 'neuronsExtracted' : neuronsExtracted}
 
 		#update user
 		print('Extracted ' +  str(len(spikes))  + ' cells.')
@@ -189,3 +198,17 @@ class datarun(object):
 		self.extras = extras
 
 		return spikes, extras
+
+	#def load_params(self, verbose = False):
+		"""
+		Parses values form params file and adds them to datarun object. 
+		If verbose is set to True, then steps will be reported.
+		"""
+	def load_ei(self, cellSpecification, arrayType = [], zeroDisconnected = False):
+		"""
+		Loads EI
+		"""
+		
+		
+
+
